@@ -297,7 +297,7 @@ func updateRun(opts *UpdateOptions) error {
 			if s.sourcePath != "" {
 				matched = remote.Path == s.sourcePath
 			} else {
-				matched = remote.InstallName() == s.name
+				matched = remote.Name == s.name
 			}
 			if matched && (remote.TreeSHA != s.treeSHA || opts.Force) {
 				updates = append(updates, pendingUpdate{
@@ -323,7 +323,7 @@ func updateRun(opts *UpdateOptions) error {
 		}
 		found := false
 		for _, remote := range skills {
-			if remote.InstallName() == entry.name || remote.Name == entry.name {
+			if remote.Name == entry.name {
 				found = true
 				break
 			}
@@ -398,15 +398,9 @@ func updateRun(opts *UpdateOptions) error {
 			Client:    apiClient,
 		}
 		// When updating skills from a custom --dir, host is nil.
-		// Use the skill's install root as the target. For namespaced
-		// skills (name contains "/"), the dir is two levels below the
-		// root instead of one.
+		// Use the skill's install root as the target (one level up from skill dir).
 		if u.local.host == nil {
-			base := filepath.Dir(u.local.dir)
-			if strings.Contains(u.local.name, "/") {
-				base = filepath.Dir(base)
-			}
-			installOpts.Dir = base
+			installOpts.Dir = filepath.Dir(u.local.dir)
 		}
 		_, installErr := installer.Install(installOpts)
 		if installErr != nil {
@@ -414,6 +408,14 @@ func updateRun(opts *UpdateOptions) error {
 			failed = true
 			continue
 		}
+
+		// Clean up old namespaced directory if this was a namespaced skill
+		// that has been migrated to flat layout
+		if strings.Contains(u.local.name, "/") {
+			oldDir := u.local.dir
+			_ = os.RemoveAll(oldDir)
+		}
+
 		if opts.IO.IsStdoutTTY() {
 			fmt.Fprintf(opts.IO.Out, "%s Updated %s\n", cs.SuccessIcon(), u.local.name)
 		} else {

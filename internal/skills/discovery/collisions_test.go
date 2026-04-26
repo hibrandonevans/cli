@@ -21,7 +21,17 @@ func TestFindNameCollisions(t *testing.T) {
 			want: nil,
 		},
 		{
-			name: "single collision with different conventions",
+			name: "collision with different namespaces",
+			skills: []Skill{
+				{Name: "pr-summary", Namespace: "", Path: "skills/pr-summary"},
+				{Name: "pr-summary", Namespace: "hubot", Path: "skills/hubot/pr-summary"},
+			},
+			want: []NameCollision{
+				{Name: "pr-summary", DisplayNames: []string{"pr-summary", "hubot/pr-summary"}},
+			},
+		},
+		{
+			name: "collision with different conventions",
 			skills: []Skill{
 				{Name: "pr-summary", Path: "skills/pr-summary"},
 				{Name: "pr-summary", Path: "plugins/hubot/skills/pr-summary", Convention: "plugins"},
@@ -33,14 +43,14 @@ func TestFindNameCollisions(t *testing.T) {
 		{
 			name: "collisions sorted by name",
 			skills: []Skill{
-				{Name: "octocat-lint", Path: "skills/octocat-lint"},
-				{Name: "octocat-lint", Path: "skills/hubot/octocat-lint"},
-				{Name: "code-review", Path: "skills/code-review"},
-				{Name: "code-review", Path: "skills/monalisa/code-review"},
+				{Name: "octocat-lint", Namespace: "", Path: "skills/octocat-lint"},
+				{Name: "octocat-lint", Namespace: "hubot", Path: "skills/hubot/octocat-lint"},
+				{Name: "code-review", Namespace: "", Path: "skills/code-review"},
+				{Name: "code-review", Namespace: "monalisa", Path: "skills/monalisa/code-review"},
 			},
 			want: []NameCollision{
-				{Name: "code-review", DisplayNames: []string{"code-review", "code-review"}},
-				{Name: "octocat-lint", DisplayNames: []string{"octocat-lint", "octocat-lint"}},
+				{Name: "code-review", DisplayNames: []string{"code-review", "monalisa/code-review"}},
+				{Name: "octocat-lint", DisplayNames: []string{"octocat-lint", "hubot/octocat-lint"}},
 			},
 		},
 	}

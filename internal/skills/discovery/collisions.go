@@ -6,20 +6,21 @@ import (
 	"strings"
 )
 
-// NameCollision represents a group of skills that share the same InstallName
+// NameCollision represents a group of skills that share the same Name
 // and would overwrite each other when installed to the same directory.
 type NameCollision struct {
-	Name         string   // the conflicting install name (may include namespace prefix)
+	Name         string   // the conflicting skill name
 	DisplayNames []string // display names of each conflicting skill
 }
 
-// FindNameCollisions detects skills that share the same InstallName and returns a
-// sorted slice of collisions. Callers decide how to present the conflict to
-// the user (different flows need different error messages).
+// FindNameCollisions detects skills that share the same Name and returns a
+// sorted slice of collisions. Since skills are installed flat (by Name),
+// skills with the same Name but different Namespace will collide.
+// Callers decide how to present the conflict to the user.
 func FindNameCollisions(skills []Skill) []NameCollision {
 	byName := make(map[string][]Skill)
 	for _, s := range skills {
-		byName[s.InstallName()] = append(byName[s.InstallName()], s)
+		byName[s.Name] = append(byName[s.Name], s)
 	}
 
 	var collisions []NameCollision
