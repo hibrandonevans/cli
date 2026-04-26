@@ -297,7 +297,7 @@ func updateRun(opts *UpdateOptions) error {
 			if s.sourcePath != "" {
 				matched = remote.Path == s.sourcePath
 			} else {
-				matched = remote.InstallName() == s.name
+				matched = remote.InstallName() == s.name || remote.Name == s.name
 			}
 			if matched && (remote.TreeSHA != s.treeSHA || opts.Force) {
 				updates = append(updates, pendingUpdate{
@@ -323,7 +323,7 @@ func updateRun(opts *UpdateOptions) error {
 		}
 		found := false
 		for _, remote := range skills {
-			if remote.InstallName() == entry.name || remote.Name == entry.name {
+			if remote.Name == entry.name || remote.InstallName() == entry.name {
 				found = true
 				break
 			}
@@ -398,15 +398,22 @@ func updateRun(opts *UpdateOptions) error {
 			Client:    apiClient,
 		}
 		// When updating skills from a custom --dir, host is nil.
-		// Use the skill's install root as the target. For namespaced
-		// skills (name contains "/"), the dir is two levels below the
-		// root instead of one.
+		// Use the skill's install root as the target.
+		installBase := ""
 		if u.local.host == nil {
 			base := filepath.Dir(u.local.dir)
+			// For namespaced skills (name contains "/"), the dir is two levels below
+			// the root; for flat skills, it's one level. Check if the old location was nested.
 			if strings.Contains(u.local.name, "/") {
 				base = filepath.Dir(base)
 			}
 			installOpts.Dir = base
+			installBase = base
+		} else {
+			installBase = filepath.Dir(u.local.dir)
+			if strings.Contains(u.local.name, "/") {
+				installBase = filepath.Dir(installBase)
+			}
 		}
 		_, installErr := installer.Install(installOpts)
 		if installErr != nil {
@@ -414,6 +421,16 @@ func updateRun(opts *UpdateOptions) error {
 			failed = true
 			continue
 		}
+
+		// Clean up old namespaced directory if migrating from nested to flat layout
+		if strings.Contains(u.local.name, "/") {
+			oldDir := u.local.dir
+			newDir := filepath.Join(installBase, filepath.FromSlash(u.skill.Name))
+			if oldDir != newDir {
+				_ = os.RemoveAll(oldDir)
+			}
+		}
+
 		if opts.IO.IsStdoutTTY() {
 			fmt.Fprintf(opts.IO.Out, "%s Updated %s\n", cs.SuccessIcon(), u.local.name)
 		} else {

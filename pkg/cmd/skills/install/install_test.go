@@ -857,7 +857,7 @@ func TestInstallRun(t *testing.T) {
 			wantErr: "conflicting names",
 		},
 		{
-			name:  "remote install all with namespaced skills avoids collisions",
+			name:  "remote install all with namespaced skills errors on collision",
 			isTTY: true,
 			stubs: func(reg *httpmock.Registry) {
 				stubResolveVersion(reg, "monalisa", "skills-repo", "v1.0.0", "abc123")
@@ -877,10 +877,6 @@ func TestInstallRun(t *testing.T) {
 				reg.Register(
 					httpmock.REST("GET", "repos/monalisa/skills-repo/git/blobs/blobB"),
 					httpmock.StringResponse(fmt.Sprintf(`{"sha": "blobB", "content": %q, "encoding": "base64"}`, contentB)))
-				stubInstallFiles(reg, "monalisa", "skills-repo", "treeA", "blobA",
-					"---\nname: xlsx-pro\ndescription: Alice\n---\n# A\n")
-				stubInstallFiles(reg, "monalisa", "skills-repo", "treeB", "blobB",
-					"---\nname: xlsx-pro\ndescription: Bob\n---\n# B\n")
 			},
 			opts: func(ios *iostreams.IOStreams, reg *httpmock.Registry) *InstallOptions {
 				t.Helper()
@@ -901,7 +897,7 @@ func TestInstallRun(t *testing.T) {
 					Dir:          t.TempDir(),
 				}
 			},
-			wantStdout: "Installed",
+			wantErr: "conflicting names",
 		},
 		{
 			name:  "remote install friendlyDir shows tilde for home paths",
@@ -1670,7 +1666,7 @@ func TestRunLocalInstall(t *testing.T) {
 			wantStdout: "Installed direct-skill",
 		},
 		{
-			name:  "namespaced skills install to separate directories",
+			name:  "namespaced skills with same name error on collision",
 			isTTY: true,
 			setup: func(t *testing.T, sourceDir, _ string) {
 				t.Helper()
@@ -1699,38 +1695,24 @@ func TestRunLocalInstall(t *testing.T) {
 					GitClient:    &git.Client{RepoDir: t.TempDir()},
 				}
 			},
-			verify: func(t *testing.T, targetDir string) {
-				t.Helper()
-				_, err := os.Stat(filepath.Join(targetDir, "alice", "xlsx-pro", "SKILL.md"))
-				assert.NoError(t, err, "alice/xlsx-pro should be installed")
-				_, err = os.Stat(filepath.Join(targetDir, "bob", "xlsx-pro", "SKILL.md"))
-				assert.NoError(t, err, "bob/xlsx-pro should be installed")
-			},
-			wantStdout: "Installed alice/xlsx-pro",
+			wantErr: "conflicting names",
 		},
 		{
-			name:  "local install with --force overwrites namespaced skill",
+			name:  "local install with flat layout overwrites existing skill",
 			isTTY: true,
 			setup: func(t *testing.T, sourceDir, targetDir string) {
 				t.Helper()
-				for _, ns := range []string{"alice", "bob"} {
-					writeLocalTestSkill(t, sourceDir, filepath.Join("skills", ns, "xlsx-pro"),
-						fmt.Sprintf("---\nname: xlsx-pro\ndescription: %s xlsx-pro\n---\n# Test\n", ns))
-				}
-				require.NoError(t, os.MkdirAll(filepath.Join(targetDir, "alice", "xlsx-pro"), 0o755))
+				writeLocalTestSkill(t, sourceDir, filepath.Join("skills", "alice", "xlsx-pro"),
+					"---\nname: xlsx-pro\ndescription: alice xlsx-pro\n---\n# Test\n")
+				require.NoError(t, os.MkdirAll(filepath.Join(targetDir, "xlsx-pro"), 0o755))
 			},
 			opts: func(ios *iostreams.IOStreams, sourceDir, targetDir string) *InstallOptions {
 				t.Helper()
-				pm := &prompter.PrompterMock{
-					MultiSelectWithSearchFunc: func(_, _ string, _, _ []string, _ func(string) prompter.MultiSelectSearchResult) ([]string, error) {
-						return []string{allSkillsKey}, nil
-					},
-				}
 				return &InstallOptions{
 					IO:           ios,
 					SkillSource:  sourceDir,
 					localPath:    sourceDir,
-					Prompter:     pm,
+					SkillName:    "alice/xlsx-pro",
 					Force:        true,
 					Agent:        "github-copilot",
 					Scope:        "project",
@@ -1739,7 +1721,12 @@ func TestRunLocalInstall(t *testing.T) {
 					GitClient:    &git.Client{RepoDir: t.TempDir()},
 				}
 			},
-			wantStdout: "Installed",
+			verify: func(t *testing.T, targetDir string) {
+				t.Helper()
+				_, err := os.Stat(filepath.Join(targetDir, "xlsx-pro", "SKILL.md"))
+				assert.NoError(t, err, "skill should be installed flat at xlsx-pro/")
+			},
+			wantStdout: "Installed alice/xlsx-pro",
 		},
 		{
 			name:  "local install existing skill without force non-interactive errors",

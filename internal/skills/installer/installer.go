@@ -178,7 +178,7 @@ func InstallLocal(opts *LocalOptions) (*Result, error) {
 }
 
 func installLocalSkill(sourceRoot string, skill discovery.Skill, baseDir string) error {
-	skillDir := filepath.Join(baseDir, filepath.FromSlash(skill.InstallName()))
+	skillDir := filepath.Join(baseDir, filepath.FromSlash(skill.Name))
 	if err := os.MkdirAll(skillDir, 0o755); err != nil {
 		return fmt.Errorf("could not create directory %s: %w", skillDir, err)
 	}
@@ -246,7 +246,7 @@ func installLocalSkill(sourceRoot string, skill discovery.Skill, baseDir string)
 }
 
 func installSkill(opts *Options, skill discovery.Skill, baseDir string) error {
-	skillDir := filepath.Join(baseDir, filepath.FromSlash(skill.InstallName()))
+	skillDir := filepath.Join(baseDir, filepath.FromSlash(skill.Name))
 	if err := os.MkdirAll(skillDir, 0o755); err != nil {
 		return fmt.Errorf("could not create directory %s: %w", skillDir, err)
 	}

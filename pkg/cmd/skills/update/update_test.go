@@ -673,7 +673,7 @@ func TestUpdateRun(t *testing.T) {
 			wantStdout: "Updated code-review",
 		},
 		{
-			name: "namespaced skill with --dir resolves install base correctly",
+			name: "namespaced skill migrates to flat layout on update",
 			setup: func(t *testing.T, dir string) {
 				t.Helper()
 				homeDir := t.TempDir()
@@ -708,7 +708,7 @@ func TestUpdateRun(t *testing.T) {
 				reg.Register(
 					httpmock.REST("GET", "repos/monalisa/octocat-skills/git/blobs/newblob1"),
 					httpmock.StringResponse(fmt.Sprintf(`{"sha": "newblob1", "encoding": "base64", "content": "%s"}`,
-						"IyBOYW1lc3BhY2VkIFNraWxsIFVwZGF0ZWQ=")))
+						"IyBGbGF0IFNraWxsIFVwZGF0ZWQ=")))
 			},
 			opts: func(ios *iostreams.IOStreams, dir string, reg *httpmock.Registry) *UpdateOptions {
 				ios.SetStdoutTTY(false)
@@ -726,10 +726,13 @@ func TestUpdateRun(t *testing.T) {
 			},
 			verify: func(t *testing.T, dir string) {
 				t.Helper()
-				content, err := os.ReadFile(filepath.Join(dir, "monalisa", "code-review", "SKILL.md"))
+				// Old namespaced location should be cleaned up
+				_, err := os.Stat(filepath.Join(dir, "monalisa", "code-review", "SKILL.md"))
+				assert.Error(t, err, "old namespaced directory should be removed")
+				// New flat location should exist
+				content, err := os.ReadFile(filepath.Join(dir, "code-review", "SKILL.md"))
 				require.NoError(t, err)
 				assert.Contains(t, string(content), "github-repo: https://github.com/monalisa/octocat-skills")
-				assert.NotContains(t, string(content), "Old namespaced content")
 			},
 			wantStdout: "Updated monalisa/code-review",
 		},
