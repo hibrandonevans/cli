@@ -2816,3 +2816,41 @@ func TestRunLog(t *testing.T) {
 		require.Equal(t, "foo", zipReader.File[0].Name)
 	})
 }
+
+func TestCopyLogWithLinePrefix_TerminalEscapeSequences(t *testing.T) {
+	tests := []struct {
+		name   string
+		input  string
+		prefix string
+		want   string
+	}{
+		{
+			name:   "strips OSC escape sequences",
+			input:  "\x1b]0;HIJACKED_TITLE\x07normal text",
+			prefix: "prefix\t",
+			want:   "prefix\tnormal text\n",
+		},
+		{
+			name:   "strips CSI color codes",
+			input:  "\x1b[31mRED_TEXT\x1b[0m",
+			prefix: "prefix\t",
+			want:   "prefix\tRED_TEXT\n",
+		},
+		{
+			name:   "passes through normal text unchanged",
+			input:  "normal log output",
+			prefix: "job\tstep\t",
+			want:   "job\tstep\tnormal log output\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			err := copyLogWithLinePrefix(&buf, strings.NewReader(tt.input), tt.prefix)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, buf.String())
+			assert.NotContains(t, buf.String(), "\x1b", "output should not contain ESC bytes")
+		})
+	}
+}
