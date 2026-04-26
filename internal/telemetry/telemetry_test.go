@@ -365,14 +365,14 @@ func TestServiceDeviceIDFallback(t *testing.T) {
 }
 
 func TestServiceFlush(t *testing.T) {
-	t.Run("does nothing when no events recorded", func(t *testing.T) {
+	t.Run("calls flusher with empty payload when no events recorded", func(t *testing.T) {
 		t.Cleanup(stubDeviceID("test-device"))
 
-		called := false
-		svc := newService(func(SendTelemetryPayload) { called = true }, nil)
+		var payload SendTelemetryPayload
+		svc := newService(func(p SendTelemetryPayload) { payload = p }, nil)
 		svc.Flush()
 
-		assert.False(t, called, "flusher should not be called with no events")
+		require.Len(t, payload.Events, 0, "flusher should be called with empty events")
 	})
 
 	t.Run("flushes events with merged dimensions", func(t *testing.T) {

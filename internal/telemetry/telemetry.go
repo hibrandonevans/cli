@@ -168,15 +168,21 @@ func WithSampleRate(rate int) telemetryServiceOption {
 // LogFlusher returns a flush function that writes telemetry payloads to the provided log writer. This is used for the "log" telemetry mode, which is intended for debugging and development.
 var LogFlusher = func(log io.Writer, colorEnabled bool) func(payload SendTelemetryPayload) {
 	return func(payload SendTelemetryPayload) {
+		header := "Telemetry payload:"
+		if colorEnabled {
+			header = ansi.Color(header, "cyan+b")
+		}
+
+		if len(payload.Events) == 0 {
+			fmt.Fprintf(log, "%s none\n", header)
+			return
+		}
+
 		payloadBytes, err := json.Marshal(payload)
 		if err != nil {
 			return
 		}
 
-		header := "Telemetry payload:"
-		if colorEnabled {
-			header = ansi.Color(header, "cyan+b")
-		}
 		fmt.Fprintf(log, "%s\n", header)
 
 		if colorEnabled {
@@ -288,6 +294,7 @@ func (s *service) Flush() {
 	s.previouslyCalled = true
 
 	if len(s.events) == 0 {
+		s.flush(SendTelemetryPayload{Events: []PayloadEvent{}})
 		return
 	}
 
