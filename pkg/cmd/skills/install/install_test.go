@@ -857,7 +857,7 @@ func TestInstallRun(t *testing.T) {
 			wantErr: "conflicting names",
 		},
 		{
-			name:  "remote install all with namespaced skills avoids collisions",
+			name:  "remote install all with namespaced skills errors on name collision",
 			isTTY: true,
 			stubs: func(reg *httpmock.Registry) {
 				stubResolveVersion(reg, "monalisa", "skills-repo", "v1.0.0", "abc123")
@@ -877,10 +877,6 @@ func TestInstallRun(t *testing.T) {
 				reg.Register(
 					httpmock.REST("GET", "repos/monalisa/skills-repo/git/blobs/blobB"),
 					httpmock.StringResponse(fmt.Sprintf(`{"sha": "blobB", "content": %q, "encoding": "base64"}`, contentB)))
-				stubInstallFiles(reg, "monalisa", "skills-repo", "treeA", "blobA",
-					"---\nname: xlsx-pro\ndescription: Alice\n---\n# A\n")
-				stubInstallFiles(reg, "monalisa", "skills-repo", "treeB", "blobB",
-					"---\nname: xlsx-pro\ndescription: Bob\n---\n# B\n")
 			},
 			opts: func(ios *iostreams.IOStreams, reg *httpmock.Registry) *InstallOptions {
 				t.Helper()
@@ -901,7 +897,7 @@ func TestInstallRun(t *testing.T) {
 					Dir:          t.TempDir(),
 				}
 			},
-			wantStdout: "Installed",
+			wantErr: "conflicting names",
 		},
 		{
 			name:  "remote install friendlyDir shows tilde for home paths",
@@ -1670,14 +1666,14 @@ func TestRunLocalInstall(t *testing.T) {
 			wantStdout: "Installed direct-skill",
 		},
 		{
-			name:  "namespaced skills install to separate directories",
+			name:  "namespaced skills install flat by skill name",
 			isTTY: true,
 			setup: func(t *testing.T, sourceDir, _ string) {
 				t.Helper()
-				for _, ns := range []string{"alice", "bob"} {
-					writeLocalTestSkill(t, sourceDir, filepath.Join("skills", ns, "xlsx-pro"),
-						fmt.Sprintf("---\nname: xlsx-pro\ndescription: %s xlsx-pro\n---\n# Test\n", ns))
-				}
+				writeLocalTestSkill(t, sourceDir, filepath.Join("skills", "alice", "skill-a"),
+					"---\nname: skill-a\ndescription: alice skill-a\n---\n# Test\n")
+				writeLocalTestSkill(t, sourceDir, filepath.Join("skills", "bob", "skill-b"),
+					"---\nname: skill-b\ndescription: bob skill-b\n---\n# Test\n")
 			},
 			opts: func(ios *iostreams.IOStreams, sourceDir, targetDir string) *InstallOptions {
 				t.Helper()
@@ -1701,36 +1697,32 @@ func TestRunLocalInstall(t *testing.T) {
 			},
 			verify: func(t *testing.T, targetDir string) {
 				t.Helper()
-				_, err := os.Stat(filepath.Join(targetDir, "alice", "xlsx-pro", "SKILL.md"))
-				assert.NoError(t, err, "alice/xlsx-pro should be installed")
-				_, err = os.Stat(filepath.Join(targetDir, "bob", "xlsx-pro", "SKILL.md"))
-				assert.NoError(t, err, "bob/xlsx-pro should be installed")
+				_, err := os.Stat(filepath.Join(targetDir, "skill-a", "SKILL.md"))
+				assert.NoError(t, err, "skill-a should be installed flat")
+				_, err = os.Stat(filepath.Join(targetDir, "skill-b", "SKILL.md"))
+				assert.NoError(t, err, "skill-b should be installed flat")
+				_, err = os.Stat(filepath.Join(targetDir, "alice"))
+				assert.True(t, os.IsNotExist(err), "no alice/ namespace directory should be created")
 			},
-			wantStdout: "Installed alice/xlsx-pro",
+			wantStdout: "Installed alice/skill-a",
 		},
 		{
-			name:  "local install with --force overwrites namespaced skill",
+			name:  "local install with --force overwrites namespaced skill at flat path",
 			isTTY: true,
 			setup: func(t *testing.T, sourceDir, targetDir string) {
 				t.Helper()
-				for _, ns := range []string{"alice", "bob"} {
-					writeLocalTestSkill(t, sourceDir, filepath.Join("skills", ns, "xlsx-pro"),
-						fmt.Sprintf("---\nname: xlsx-pro\ndescription: %s xlsx-pro\n---\n# Test\n", ns))
-				}
-				require.NoError(t, os.MkdirAll(filepath.Join(targetDir, "alice", "xlsx-pro"), 0o755))
+				writeLocalTestSkill(t, sourceDir, filepath.Join("skills", "alice", "xlsx-pro"),
+					"---\nname: xlsx-pro\ndescription: alice xlsx-pro\n---\n# Test\n")
+				// Pre-create the flat target directory (skills are installed by Name, not InstallName)
+				require.NoError(t, os.MkdirAll(filepath.Join(targetDir, "xlsx-pro"), 0o755))
 			},
 			opts: func(ios *iostreams.IOStreams, sourceDir, targetDir string) *InstallOptions {
 				t.Helper()
-				pm := &prompter.PrompterMock{
-					MultiSelectWithSearchFunc: func(_, _ string, _, _ []string, _ func(string) prompter.MultiSelectSearchResult) ([]string, error) {
-						return []string{allSkillsKey}, nil
-					},
-				}
 				return &InstallOptions{
 					IO:           ios,
 					SkillSource:  sourceDir,
 					localPath:    sourceDir,
-					Prompter:     pm,
+					SkillName:    "alice/xlsx-pro",
 					Force:        true,
 					Agent:        "github-copilot",
 					Scope:        "project",
@@ -1739,7 +1731,12 @@ func TestRunLocalInstall(t *testing.T) {
 					GitClient:    &git.Client{RepoDir: t.TempDir()},
 				}
 			},
-			wantStdout: "Installed",
+			verify: func(t *testing.T, targetDir string) {
+				t.Helper()
+				_, err := os.Stat(filepath.Join(targetDir, "xlsx-pro", "SKILL.md"))
+				assert.NoError(t, err, "xlsx-pro should be installed flat")
+			},
+			wantStdout: "Installed alice/xlsx-pro",
 		},
 		{
 			name:  "local install existing skill without force non-interactive errors",

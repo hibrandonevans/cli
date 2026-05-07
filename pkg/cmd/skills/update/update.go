@@ -414,6 +414,12 @@ func updateRun(opts *UpdateOptions) error {
 			failed = true
 			continue
 		}
+		// When a skill migrates from namespaced to flat layout, remove the old
+		// namespaced directory and its now-empty parent namespace directory.
+		if strings.Contains(u.local.name, "/") {
+			_ = os.RemoveAll(u.local.dir)
+			_ = os.Remove(filepath.Dir(u.local.dir))
+		}
 		if opts.IO.IsStdoutTTY() {
 			fmt.Fprintf(opts.IO.Out, "%s Updated %s\n", cs.SuccessIcon(), u.local.name)
 		} else {

@@ -726,10 +726,14 @@ func TestUpdateRun(t *testing.T) {
 			},
 			verify: func(t *testing.T, dir string) {
 				t.Helper()
-				content, err := os.ReadFile(filepath.Join(dir, "monalisa", "code-review", "SKILL.md"))
+				// Skill is now installed flat by Name, not under the namespace directory.
+				content, err := os.ReadFile(filepath.Join(dir, "code-review", "SKILL.md"))
 				require.NoError(t, err)
 				assert.Contains(t, string(content), "github-repo: https://github.com/monalisa/octocat-skills")
 				assert.NotContains(t, string(content), "Old namespaced content")
+				// Old namespaced directory should have been cleaned up.
+				_, statErr := os.Stat(filepath.Join(dir, "monalisa", "code-review"))
+				assert.True(t, os.IsNotExist(statErr), "old namespaced directory should be removed")
 			},
 			wantStdout: "Updated monalisa/code-review",
 		},
