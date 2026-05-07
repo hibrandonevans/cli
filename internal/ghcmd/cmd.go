@@ -83,7 +83,13 @@ func Main() exitCode {
 		// Without a valid on-disk config we can't honour user telemetry preferences, so disable it to be safe.
 		telemetryService = &telemetry.NoOpService{}
 	case os.Getenv("GH_PRIVATE_ENABLE_TELEMETRY") == "" || mightBeGHESUser(cfg):
-		telemetryService = &telemetry.NoOpService{}
+		if telemetry.ParseTelemetryState(cfg.Telemetry().Value) == telemetry.Logged {
+			svc := telemetry.NewService(telemetry.LogFlusher(ioStreams.ErrOut, ioStreams.ColorEnabled()))
+			svc.Disable()
+			telemetryService = svc
+		} else {
+			telemetryService = &telemetry.NoOpService{}
+		}
 	default:
 		telemetryState := telemetry.ParseTelemetryState(cfg.Telemetry().Value)
 		switch telemetryState {

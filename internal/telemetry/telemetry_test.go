@@ -336,6 +336,18 @@ func TestNewServiceLogModeFlushesToWriter(t *testing.T) {
 	assert.Contains(t, output, `"value"`)
 }
 
+func TestNewServiceLogModeLogsNoneWhenNoEvents(t *testing.T) {
+	t.Cleanup(stubDeviceID("test-device"))
+
+	var buf bytes.Buffer
+	svc := NewService(LogFlusher(&buf, false))
+	svc.Flush()
+
+	output := buf.String()
+	assert.Contains(t, output, "Telemetry payload: none")
+	assert.NotContains(t, output, "{")
+}
+
 func TestNewServiceLogModeWithColorLogsToWriter(t *testing.T) {
 	t.Cleanup(stubDeviceID("test-device"))
 
@@ -365,14 +377,16 @@ func TestServiceDeviceIDFallback(t *testing.T) {
 }
 
 func TestServiceFlush(t *testing.T) {
-	t.Run("does nothing when no events recorded", func(t *testing.T) {
+	t.Run("flushes empty payload when no events recorded", func(t *testing.T) {
 		t.Cleanup(stubDeviceID("test-device"))
 
+		var captured SendTelemetryPayload
 		called := false
-		svc := newService(func(SendTelemetryPayload) { called = true }, nil)
+		svc := newService(func(p SendTelemetryPayload) { called = true; captured = p }, nil)
 		svc.Flush()
 
-		assert.False(t, called, "flusher should not be called with no events")
+		assert.True(t, called, "flusher should be called with empty payload when no events")
+		assert.Empty(t, captured.Events)
 	})
 
 	t.Run("flushes events with merged dimensions", func(t *testing.T) {
@@ -599,24 +613,24 @@ func TestWithAdditionalCommonDimensions(t *testing.T) {
 }
 
 func TestServiceDisable(t *testing.T) {
-	t.Run("prevents flush from sending events", func(t *testing.T) {
+	t.Run("flushes empty payload instead of recorded events", func(t *testing.T) {
 		t.Cleanup(stubDeviceID("test-device"))
 
-		called := false
-		svc := newService(func(SendTelemetryPayload) { called = true }, nil)
+		var captured SendTelemetryPayload
+		svc := newService(func(p SendTelemetryPayload) { captured = p }, nil)
 
 		svc.Record(ghtelemetry.Event{Type: "test"})
 		svc.Disable()
 		svc.Flush()
 
-		assert.False(t, called, "flusher should not be called after Disable()")
+		assert.Empty(t, captured.Events, "flusher should be called with empty payload after Disable()")
 	})
 
-	t.Run("prevents flush even with multiple recorded events", func(t *testing.T) {
+	t.Run("flushes empty payload even with multiple recorded events", func(t *testing.T) {
 		t.Cleanup(stubDeviceID("test-device"))
 
-		called := false
-		svc := newService(func(SendTelemetryPayload) { called = true }, nil)
+		var captured SendTelemetryPayload
+		svc := newService(func(p SendTelemetryPayload) { captured = p }, nil)
 
 		svc.Record(ghtelemetry.Event{Type: "event1"})
 		svc.Record(ghtelemetry.Event{Type: "event2"})
@@ -624,20 +638,20 @@ func TestServiceDisable(t *testing.T) {
 		svc.Disable()
 		svc.Flush()
 
-		assert.False(t, called, "flusher should not be called after Disable()")
+		assert.Empty(t, captured.Events, "flusher should be called with empty payload after Disable()")
 	})
 
 	t.Run("can be called before any events are recorded", func(t *testing.T) {
 		t.Cleanup(stubDeviceID("test-device"))
 
-		called := false
-		svc := newService(func(SendTelemetryPayload) { called = true }, nil)
+		var captured SendTelemetryPayload
+		svc := newService(func(p SendTelemetryPayload) { captured = p }, nil)
 
 		svc.Disable()
 		svc.Record(ghtelemetry.Event{Type: "test"})
 		svc.Flush()
 
-		assert.False(t, called, "flusher should not be called when disabled before recording")
+		assert.Empty(t, captured.Events, "flusher should be called with empty payload when disabled before recording")
 	})
 }
 
