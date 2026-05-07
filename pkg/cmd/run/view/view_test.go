@@ -2816,3 +2816,46 @@ func TestRunLog(t *testing.T) {
 		require.Equal(t, "foo", zipReader.File[0].Name)
 	})
 }
+
+func TestCopyLogWithLinePrefix(t *testing.T) {
+	tests := []struct {
+		name   string
+		input  string
+		prefix string
+		want   string
+	}{
+		{
+			name:   "plain text",
+			input:  "hello\nworld\n",
+			prefix: "job\tstep\t",
+			want:   "job\tstep\thello\njob\tstep\tworld\n",
+		},
+		{
+			name:   "strips SGR color escape sequences",
+			input:  "\x1b[32mgreen text\x1b[0m\nnormal\n",
+			prefix: "job\tstep\t",
+			want:   "job\tstep\tgreen text\njob\tstep\tnormal\n",
+		},
+		{
+			name:   "strips OSC escape sequences",
+			input:  "\x1b]0;window title\x07line\n",
+			prefix: "job\tstep\t",
+			want:   "job\tstep\tline\n",
+		},
+		{
+			name:   "strips cursor movement sequences",
+			input:  "\x1b[2Aup two lines\n",
+			prefix: "job\tstep\t",
+			want:   "job\tstep\tup two lines\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var out bytes.Buffer
+			err := copyLogWithLinePrefix(&out, strings.NewReader(tt.input), tt.prefix)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, out.String())
+		})
+	}
+}

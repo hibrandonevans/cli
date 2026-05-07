@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"time"
 
@@ -578,10 +579,14 @@ func displayLogSegments(w io.Writer, segments []logSegment) error {
 	return nil
 }
 
+// ansiEscapePattern matches ANSI/VT escape sequences to prevent terminal injection from log content.
+var ansiEscapePattern = regexp.MustCompile(`\x1b\][^\x07]*\x07|\x1b\[[0-9;]*[ -/]*[A-Za-z@-~]|\x1b[@-Z\\-_]`)
+
 func copyLogWithLinePrefix(w io.Writer, r io.Reader, prefix string) error {
 	scanner := bufio.NewScanner(r)
 	for scanner.Scan() {
-		fmt.Fprintf(w, "%s%s\n", prefix, scanner.Text())
+		line := ansiEscapePattern.ReplaceAllString(scanner.Text(), "")
+		fmt.Fprintf(w, "%s%s\n", prefix, line)
 	}
 	return nil
 }
