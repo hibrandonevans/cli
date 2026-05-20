@@ -1,0 +1,14 @@
+name: Difflore Local3017 CLI Depth 1
+
+on:
+  workflow_dispatch:
+
+jobs:
+  proof:
+    name: CLI depth proof
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@main
+      - name: Emit proof marker
+        run: echo "local3017 8ff96 cli depth 1"
